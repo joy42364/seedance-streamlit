@@ -1,0 +1,3 @@
+streamlit>=1.50
+volcengine-python-sdk>=5.0
+av>=13

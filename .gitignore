@@ -1,0 +1,17 @@
+# Secrets
+APIKEY
+
+# Runtime data
+.venv/
+venv/
+upload_cache/
+videos/
+logs/
+tasks_history.json
+tasks_history.json.tmp
+
+# OS / editor
+.DS_Store
+.vscode/
+__pycache__/
+*.pyc
