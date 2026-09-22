@@ -3,6 +3,7 @@ APIKEY
 
 # Runtime data
 .venv/
+.idea/
 venv/
 upload_cache/
 videos/
@@ -15,3 +16,5 @@ tasks_history.json.tmp
 .vscode/
 __pycache__/
 *.pyc
+uv.lock
+api_keys.json

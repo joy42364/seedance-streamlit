@@ -1,0 +1,16 @@
+[project]
+name = "seedance-streamlit"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.14"
+dependencies = [
+    "av>=13",
+    "httpx>=0.28.1",
+    "pydantic>=2.13.5",
+    "streamlit>=1.50",
+    "volcengine-python-sdk>=5.0",
+]
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+default = true

@@ -27,16 +27,21 @@ from volcenginesdkarkruntime import Ark
 
 import tunnel
 
+# 平台在售视频模型（dev 库 cloud_llm_model PUBLISHED，透传给上游原样使用）
 MODELS: dict[str, str] = {
-    "Pro": "doubao-seedance-2-0-260128",
-    "Fast": "doubao-seedance-2-0-fast-260128",
+    "2.5": "doubao-seedance-2.5",
+    "2.0": "doubao-seedance-2.0",
 }
 MODEL_DESC = {
-    "Pro": ("高品质", "~90s", "适合精细控制与复杂镜头"),
-    "Fast": ("速度优先", "~35s", "适合快速迭代"),
+    "2.5": ("平台主推", "~60s", "最新版，时长最大 30 秒"),
+    "2.0": ("多模态", "~90s", "支持图/视频/音频参考输入"),
 }
 RATIOS = ["16:9", "9:16", "1:1", "21:9", "4:3", "3:4"]
-RESOLUTION_CHOICES = ["(服务端默认)", "720p", "480p"]
+# 4k 为预置档（260922）：上游暂未开放，选了会被上游拒；档名以平台模型配置为准（大小写敏感）
+RESOLUTION_CHOICES = ["(服务端默认)", "1080p", "720p", "480p", "4k"]
+# 平台网关透传基址：{网关}/cloud/video/api + 上游 /api/v3（所以有两段 api）。
+# 本地联调网关默认 8080；dev/test/prod 网关地址由运维提供，页面侧边栏可改。
+DEFAULT_BASE_URL = "http://localhost:8080/cloud/video/api/api/v3"
 TERMINAL_STATUSES = {"succeeded", "failed", "cancelled"}
 BASE_DIR = Path(__file__).resolve().parent
 HISTORY_FILE = BASE_DIR / "tasks_history.json"
@@ -1158,8 +1163,14 @@ def clear_submit_errors() -> None:
 
 
 @st.cache_resource
-def get_client(api_key: str) -> Ark:
-    return Ark(api_key=api_key)
+def get_client(api_key: str, base_url: str) -> Ark:
+    # base_url 必须进缓存键：切换网关（本地/dev）时若只看 api_key 会命中旧客户端
+    return Ark(api_key=api_key, base_url=base_url)
+
+
+def _current_base_url() -> str:
+    """侧边栏 Base URL 输入框当前值（未渲染侧边栏的代码路径回落默认值）。"""
+    return st.session_state.get("base_url") or DEFAULT_BASE_URL
 
 
 def new_task_record(task_id: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -1291,15 +1302,29 @@ def render_sidebar(tun: tunnel.Tunnel) -> dict[str, Any]:
         "API Key",
         type="password",
         label_visibility="collapsed",
-        placeholder="sk-... 从火山方舟控制台获取",
+        placeholder="sk-wm-... 平台控制台签发的业务 Key",
         key="api_key",
     )
 
+    if "base_url" not in st.session_state:
+        st.session_state.base_url = os.environ.get("ARK_BASE_URL", DEFAULT_BASE_URL)
+    st.sidebar.text_input(
+        "API Base URL",
+        label_visibility="collapsed",
+        help="平台网关基址：{网关}/cloud/video/api/api/v3。本地=http://localhost:8080；dev 由运维提供",
+        key="base_url",
+    )
+
     st.sidebar.markdown('<div class="section-label">模型</div>', unsafe_allow_html=True)
+    model_key = st.session_state.get("model_key", "2.5")
+    if model_key not in MODELS:
+        # 模型表换代后，旧会话里残留的 Pro/Fast 等值已不在表中，回落默认
+        model_key = "2.5"
+        st.session_state.model_key = model_key
     model_key = st.sidebar.radio(
         "模型",
         list(MODELS.keys()),
-        index=list(MODELS.keys()).index(st.session_state.get("model_key", "Pro")),
+        index=list(MODELS.keys()).index(model_key),
         label_visibility="collapsed",
         horizontal=True,
         key="model_key",
@@ -1314,11 +1339,12 @@ def render_sidebar(tun: tunnel.Tunnel) -> dict[str, Any]:
         index=RATIOS.index(st.session_state.get("ratio", "16:9")),
         key="ratio",
     )
+    # 会话残留值可能已不在选项表（如档名字符串随上游调整），不在时回落 720p，防 .index() 直接崩页面
+    _resolution_cached = st.session_state.get("resolution_choice")
     resolution_choice = c2.selectbox(
         "分辨率", RESOLUTION_CHOICES,
-        index=RESOLUTION_CHOICES.index(
-            st.session_state.get("resolution_choice", "720p")
-        ),
+        index=(RESOLUTION_CHOICES.index(_resolution_cached)
+               if _resolution_cached in RESOLUTION_CHOICES else 1),
         key="resolution_choice",
     )
     resolution = None if resolution_choice == RESOLUTION_CHOICES[0] else resolution_choice
@@ -1388,6 +1414,7 @@ def render_sidebar(tun: tunnel.Tunnel) -> dict[str, Any]:
 
     return {
         "api_key": api_key,
+        "base_url": _current_base_url(),
         "model": MODELS[model_key],
         "model_key": model_key,
         "ratio": ratio,
@@ -1408,7 +1435,7 @@ def sync_from_server(api_key: str) -> None:
     if not api_key:
         st.sidebar.error("先填 API Key")
         return
-    client = get_client(api_key)
+    client = get_client(api_key, _current_base_url())
     try:
         with st.spinner("拉取服务端历史..."):
             resp = client.content_generation.tasks.list(page_size=50)
@@ -1843,7 +1870,7 @@ def submit_task(
 
     tools = [{"type": "web_search"}] if settings["web_search"] else None
 
-    client = get_client(settings["api_key"])
+    client = get_client(settings["api_key"], settings["base_url"])
     try:
         resp = client.content_generation.tasks.create(
             model=settings["model"],
@@ -2207,7 +2234,7 @@ def render_live_feed_card(task_id: str, api_key: str) -> None:
             "status", "video_url", "last_frame_url", "error_message", "revised_prompt",
         )
         try:
-            client = get_client(api_key)
+            client = get_client(api_key, _current_base_url())
             resp = client.content_generation.tasks.get(task_id=task_id)
             updated = merge_server_task(task, resp)
             if any(updated.get(f) != task.get(f) for f in meaningful_fields):

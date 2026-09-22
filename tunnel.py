@@ -15,6 +15,7 @@ import platform
 import queue
 import re
 import secrets
+import shutil
 import subprocess
 import threading
 import time
@@ -48,7 +49,14 @@ def _pick_binary() -> Path:
         return BIN_DIR / f"cloudflared-linux-{arch}"
     if system == "windows":
         bundled = BIN_DIR / "cloudflared-windows-amd64.exe"
-        return bundled if bundled.exists() else Path("cloudflared")
+        if bundled.exists():
+            return bundled
+        # Path("cloudflared").exists() 只查工作目录不查 PATH，winget 安装（如
+        # C:\Program Files (x86)\cloudflared）会误判为未安装——用 shutil.which 才是真 PATH 查找
+        found = shutil.which("cloudflared")
+        if found:
+            return Path(found)
+        return Path("cloudflared")
     raise TunnelError(f"unsupported platform: {system}/{machine}")
 
 
