@@ -1339,20 +1339,20 @@ def render_sidebar(tun: tunnel.Tunnel) -> dict[str, Any]:
         index=RATIOS.index(st.session_state.get("ratio", "16:9")),
         key="ratio",
     )
-    # 会话残留值可能已不在选项表（如档名字符串随上游调整），不在时回落 720p，防 .index() 直接崩页面
-    _resolution_cached = st.session_state.get("resolution_choice")
-    resolution_choice = c2.selectbox(
-        "分辨率", RESOLUTION_CHOICES,
-        index=(RESOLUTION_CHOICES.index(_resolution_cached)
-               if _resolution_cached in RESOLUTION_CHOICES else 1),
-        key="resolution_choice",
-    )
+    # 会话残留值可能已不在选项表（如档名字符串随上游调整），不在时回落 720p。
+    # 回落直接写 session_state（widget 声明之前），selectbox 不再传 index——
+    # key 绑定与显式 index 并存会触发 Streamlit "default value ... Session State API" 警告。
+    if st.session_state.get("resolution_choice") not in RESOLUTION_CHOICES:
+        st.session_state.resolution_choice = RESOLUTION_CHOICES[1]
+    resolution_choice = c2.selectbox("分辨率", RESOLUTION_CHOICES, key="resolution_choice")
     resolution = None if resolution_choice == RESOLUTION_CHOICES[0] else resolution_choice
-    duration = st.sidebar.slider(
-        "时长 (秒)", 4, 15,
-        st.session_state.get("duration", 10),
-        key="duration",
-    )
+    # 时长上限按模型联动：2.5 最大 30 秒、2.0 最大 15 秒（上游 V1.2：4–15，seedance-2.5 最大 30）。
+    # 旧会话值超上限时先钳位写 session_state（widget 声明之前），slider 不传 value 避免同类警告。
+    _max_duration = 30 if model_key == "2.5" else 15
+    _cur_duration = st.session_state.get("duration", 10)
+    if not (4 <= _cur_duration <= _max_duration):
+        st.session_state.duration = min(max(_cur_duration, 4), _max_duration)
+    duration = st.sidebar.slider("时长 (秒)", 4, _max_duration, key="duration")
 
     st.sidebar.markdown('<div class="section-label">选项</div>', unsafe_allow_html=True)
     generate_audio = st.sidebar.toggle(
