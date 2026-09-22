@@ -18,3 +18,5 @@ __pycache__/
 *.pyc
 uv.lock
 api_keys.json
+
+dist/

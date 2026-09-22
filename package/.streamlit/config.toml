@@ -1,0 +1,23 @@
+# 皖美AI 视频生成调试工具 — Streamlit 主题与行为配置
+# 配色对齐 app.py 内嵌 CSS：深底 + 青绿 accent
+
+[theme]
+base = "dark"
+primaryColor = "#26c6a8"
+backgroundColor = "#08090b"
+secondaryBackgroundColor = "#12151a"
+textColor = "#f5f7fa"
+
+[server]
+# 无头模式：不弹邮箱注册引导（首次启动会卡在 Email 输入）
+headless = true
+
+[browser]
+# 不上报使用统计
+gatherUsageStats = false
+
+[client]
+# 隐藏侧边栏默认导航（单页工具用不到）
+showSidebarNavigation = false
+# 顶栏只留最简：隐藏 Deploy/菜单按钮，保留重跑等基础操作
+toolbarMode = "minimal"

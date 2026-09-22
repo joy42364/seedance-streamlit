@@ -41,7 +41,7 @@ RATIOS = ["16:9", "9:16", "1:1", "21:9", "4:3", "3:4"]
 RESOLUTION_CHOICES = ["(服务端默认)", "1080p", "720p", "480p", "4k"]
 # 平台网关透传基址：{网关}/cloud/video/api + 上游 /api/v3（所以有两段 api）。
 # 本地联调网关默认 8080；dev/test/prod 网关地址由运维提供，页面侧边栏可改。
-DEFAULT_BASE_URL = "http://localhost:8080/cloud/video/api/api/v3"
+DEFAULT_BASE_URL = "http://117.57.203.251:6080/prod-api/cloud/video/api/api/v3"
 TERMINAL_STATUSES = {"succeeded", "failed", "cancelled"}
 BASE_DIR = Path(__file__).resolve().parent
 HISTORY_FILE = BASE_DIR / "tasks_history.json"
@@ -1334,11 +1334,10 @@ def render_sidebar(tun: tunnel.Tunnel) -> dict[str, Any]:
 
     st.sidebar.markdown('<div class="section-label">画面</div>', unsafe_allow_html=True)
     c1, c2 = st.sidebar.columns(2)
-    ratio = c1.selectbox(
-        "比例", RATIOS,
-        index=RATIOS.index(st.session_state.get("ratio", "16:9")),
-        key="ratio",
-    )
+    # 会话残留值不在选项表时回落 16:9（同 resolution 模式，key 绑定与显式 index 并存会触发警告）
+    if st.session_state.get("ratio") not in RATIOS:
+        st.session_state.ratio = "16:9"
+    ratio = c1.selectbox("比例", RATIOS, key="ratio")
     # 会话残留值可能已不在选项表（如档名字符串随上游调整），不在时回落 720p。
     # 回落直接写 session_state（widget 声明之前），selectbox 不再传 index——
     # key 绑定与显式 index 并存会触发 Streamlit "default value ... Session State API" 警告。
@@ -1355,33 +1354,31 @@ def render_sidebar(tun: tunnel.Tunnel) -> dict[str, Any]:
     duration = st.sidebar.slider("时长 (秒)", 4, _max_duration, key="duration")
 
     st.sidebar.markdown('<div class="section-label">选项</div>', unsafe_allow_html=True)
+    # 默认值提前写 session_state（widget 声明之前），toggle 不再传 value——避免 key+value 并存警告
+    st.session_state.setdefault("generate_audio", True)
     generate_audio = st.sidebar.toggle(
-        "生成音频", value=st.session_state.get("generate_audio", True),
-        key="generate_audio", help="为视频合成环境声/音乐",
+        "生成音频", key="generate_audio", help="为视频合成环境声/音乐",
     )
+    st.session_state.setdefault("camera_fixed", False)
     camera_fixed = st.sidebar.toggle(
-        "固定镜头", value=st.session_state.get("camera_fixed", False),
-        key="camera_fixed", help="camera_fixed",
+        "固定镜头", key="camera_fixed", help="camera_fixed",
     )
+    st.session_state.setdefault("return_last_frame", False)
     return_last_frame = st.sidebar.toggle(
-        "返回尾帧", value=st.session_state.get("return_last_frame", False),
-        key="return_last_frame", help="生成结束输出尾帧图片",
+        "返回尾帧", key="return_last_frame", help="生成结束输出尾帧图片",
     )
+    st.session_state.setdefault("web_search", False)
     web_search = st.sidebar.toggle(
-        "联网搜索增强", value=st.session_state.get("web_search", False),
-        key="web_search", help="prompt 增强",
+        "联网搜索增强", key="web_search", help="prompt 增强",
     )
+    st.session_state.setdefault("watermark", False)
     watermark = st.sidebar.toggle(
-        "水印", value=st.session_state.get("watermark", False),
-        key="watermark", help="在生成视频右下角添加 Seedance 水印",
+        "水印", key="watermark", help="在生成视频右下角添加 Seedance 水印",
     )
 
     with st.sidebar.expander("高级 · Seed", expanded=False):
-        seed_input = st.text_input(
-            "Seed（-1 = 随机）",
-            value=st.session_state.get("seed_text", "-1"),
-            key="seed_text",
-        )
+        st.session_state.setdefault("seed_text", "-1")
+        seed_input = st.text_input("Seed（-1 = 随机）", key="seed_text")
     seed: int | None = None
     seed_val = None
     if seed_input.strip():
