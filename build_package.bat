@@ -12,8 +12,24 @@ set "BASE_PYTHON=D:\my_uv\python\cpython-3.14-windows-x86_64-none"
 set "OUT=dist\seedance-video-tool"
 set "ZIP=dist\seedance-video-tool.zip"
 
+echo [0/8] 结束残留进程（工具窗口若还开着会占用文件，导致删除失败）...
+taskkill /F /IM cloudflared-windows-amd64.exe >nul 2>nul
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -match 'streamlit run' -and $_.CommandLine -match 'seedance' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>nul
+ping -n 3 127.0.0.1 >nul
+
 echo [1/8] 清理旧产物...
-if exist "%OUT%" rmdir /s /q "%OUT%"
+if exist "%OUT%" (
+    rmdir /s /q "%OUT%" 2>nul
+    if exist "%OUT%" (
+        echo.
+        echo [错误] 旧目录删除不干净，可能仍有进程占用文件：
+        echo        %OUT%
+        echo        请关闭正在运行的「视频工具」窗口或 cloudflared 进程后重试。
+        echo.
+        pause
+        exit /b 1
+    )
+)
 if exist "%ZIP%" del /q "%ZIP%"
 mkdir "%OUT%"
 
@@ -45,10 +61,15 @@ mkdir "%OUT%\videos" "%OUT%\upload_cache" "%OUT%\logs" 2>nul
 echo [] > "%OUT%\api_keys.json"
 echo [] > "%OUT%\tasks_history.json"
 
-echo [8/8] 压缩 zip（约需 1-3 分钟）...
-cd dist
-tar -a -c -f seedance-video-tool.zip seedance-video-tool
-cd ..
+echo [8/8] 压缩 zip（约需 2-5 分钟，Python zipfile 稳定输出）...
+"%BASE_PYTHON%\python.exe" "%~dp0.temp\make_zip.py"
+if errorlevel 1 (
+    echo.
+    echo [错误] 压缩失败（脚本已自动重试 3 次），请稍后重新执行本脚本。
+    echo.
+    pause
+    exit /b 1
+)
 
 echo.
 echo 打包完成：%ZIP%

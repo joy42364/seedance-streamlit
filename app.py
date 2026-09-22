@@ -1316,15 +1316,14 @@ def render_sidebar(tun: tunnel.Tunnel) -> dict[str, Any]:
     )
 
     st.sidebar.markdown('<div class="section-label">模型</div>', unsafe_allow_html=True)
-    model_key = st.session_state.get("model_key", "2.5")
-    if model_key not in MODELS:
+    st.session_state.setdefault("model_key", "2.5")
+    if st.session_state.model_key not in MODELS:
         # 模型表换代后，旧会话里残留的 Pro/Fast 等值已不在表中，回落默认
-        model_key = "2.5"
-        st.session_state.model_key = model_key
+        st.session_state.model_key = "2.5"
+    # radio 不传 index——key 绑定与显式 index 并存会触发 Streamlit "default value ... Session State API" 警告
     model_key = st.sidebar.radio(
         "模型",
         list(MODELS.keys()),
-        index=list(MODELS.keys()).index(model_key),
         label_visibility="collapsed",
         horizontal=True,
         key="model_key",

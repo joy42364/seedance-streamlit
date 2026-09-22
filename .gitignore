@@ -8,6 +8,7 @@ venv/
 upload_cache/
 videos/
 logs/
+.temp/
 tasks_history.json
 tasks_history.json.tmp
 
